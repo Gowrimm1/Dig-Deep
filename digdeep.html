@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DigDeep — Digging Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --soil1: #8B5E3C;
+      --soil2: #6B4226;
+      --soil3: #A0714F;
+      --cream: #FDF6EC;
+      --accent: #E8A838;
+      --text: #2C1810;
+      --muted: #7A5C4A;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--cream);
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text);
+    }
+
+    /* ── LAYOUT ── */
+    .game-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 18px 14px 40px;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding: 14px 22px;
+      background: var(--soil2);
+      border-radius: 22px;
+    }
+
+    .logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 26px;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+      user-select: none;
+    }
+    .logo span { color: #fff; }
+
+    .stats {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .stat-pill {
+      background: rgba(255,255,255,0.13);
+      border-radius: 50px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    /* ── MAIN PANELS ── */
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    /* ── DIG PANEL ── */
+    .dig-panel {
+      background: var(--soil1);
+      border-radius: 26px;
+      padding: 16px;
+      position: relative;
+      box-shadow: inset 0 -8px 24px rgba(0,0,0,0.25);
+    }
+
+    .dig-label {
+      font-family: 'Playfair Display', serif;
+      font-size: 12px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    .ground {
+      width: 100%;
+      height: 400px;
+      position: relative;
+      border-radius: 18px;
+      overflow: hidden;
+      cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E⛏️%3C/text%3E%3C/svg%3E") 8 24, crosshair;
+      background:
+        repeating-linear-gradient(
+          180deg,
+          #7A4E2D 0px, #6B4226 50px,
+          #5C3620 50px, #7A4E2D 100px
+        );
+      user-select: none;
+    }
+
+    .ground::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px),
+        radial-gradient(circle, rgba(0,0,0,0.09) 1px, transparent 1px);
+      background-size: 22px 22px, 33px 33px;
+      background-position: 0 0, 11px 11px;
+      pointer-events: none;
+    }
+
+    /* soil surface grass strip */
+    .ground::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 14px;
+      background: linear-gradient(180deg, #5a8a3c 0%, #4e7a30 60%, transparent 100%);
+      pointer-events: none;
+    }
+
+    /* ── HOLE ── */
+    .hole {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle, #1a0f08 20%, #2C1810 60%, rgba(44,24,16,0) 100%);
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(0);
+      animation: holePop 0.4s cubic-bezier(.17,.67,.34,1.2) forwards;
+    }
+
+    @keyframes holePop {
+      0%   { transform: translate(-50%,-50%) scale(0); opacity:0; }
+      60%  { transform: translate(-50%,-50%) scale(1.18); opacity:1; }
+      100% { transform: translate(-50%,-50%) scale(1); opacity:1; }
+    }
+
+    /* ── DIRT PARTICLES ── */
+    .dirt-particle {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: dirtFly 0.75s ease-out forwards;
+    }
+
+    @keyframes dirtFly {
+      0%   { transform: translate(0,0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) scale(0.15); opacity: 0; }
+    }
+
+    /* ── ITEM POP ── */
+    .item-pop {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      animation: itemRise 1.2s ease-out forwards;
+      font-size: 32px;
+      filter: drop-shadow(0 3px 10px rgba(0,0,0,0.55));
+      z-index: 20;
+    }
+
+    @keyframes itemRise {
+      0%   { transform: translate(-50%,-50%) scale(0.2); opacity:1; }
+      40%  { transform: translate(-50%,-85%) scale(1.25); opacity:1; }
+      70%  { transform: translate(-50%,-110%) scale(1); opacity:1; }
+      100% { transform: translate(-50%,-160%) scale(0.7); opacity:0; }
+    }
+
+    /* ── TOAST ── */
+    .find-toast {
+      position: absolute;
+      pointer-events: none;
+      animation: toastUp 1.5s ease-out forwards;
+      z-index: 25;
+      transform: translateX(-50%);
+    }
+
+    @keyframes toastUp {
+      0%   { transform: translateX(-50%) translateY(0); opacity:1; }
+      100% { transform: translateX(-50%) translateY(-70px); opacity:0; }
+    }
+
+    .toast-pill {
+      background: #fff;
+      border-radius: 50px;
+      padding: 7px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      box-shadow: 0 5px 20px rgba(0,0,0,0.22);
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .toast-pill .worth { color: #27ae60; }
+    .toast-pill .empty-lbl { color: #999; }
+
+    /* ── DEPTH BAR ── */
+    .depth-bar-wrap {
+      margin-top: 12px;
+      height: 7px;
+      background: rgba(0,0,0,0.18);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .depth-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent) 0%, #d07020 100%);
+      border-radius: 10px;
+      transition: width 0.5s ease;
+    }
+
+    .depth-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      margin-top: 6px;
+      text-align: center;
+      letter-spacing: 0.4px;
+    }
+
+    .shovel-hint {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+    }
+
+    /* ── RIGHT COLUMN ── */
+    .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+    .panel-card {
+      background: #fff;
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    }
+
+    .panel-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px;
+      color: var(--text);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-title .badge {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      background: #f0e8d6;
+      color: var(--muted);
+      border-radius: 50px;
+      padding: 2px 9px;
+      margin-left: auto;
+    }
+
+    /* ── INVENTORY GRID ── */
+    .inv-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .inv-slot {
+      aspect-ratio: 1;
+      border-radius: 13px;
+      background: #f8f2ea;
+      border: 1.5px dashed #d9c9b0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 23px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .inv-slot:not(.empty):hover {
+      background: #f0e4cc;
+      transform: scale(1.07);
+      border-color: var(--accent);
+    }
+
+    .inv-slot .qty {
+      position: absolute;
+      bottom: 3px;
+      right: 5px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .inv-slot .item-label {
+      font-size: 8px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-top: 1px;
+      text-align: center;
+      line-height: 1.1;
+    }
+
+    .inv-slot.empty { opacity: 0.45; cursor: default; }
+
+    /* ── STORE ── */
+    .store-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+
+    .store-list::-webkit-scrollbar { width: 4px; }
+    .store-list::-webkit-scrollbar-track { background: transparent; }
+    .store-list::-webkit-scrollbar-thumb { background: #d9c9b0; border-radius: 4px; }
+
+    .store-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 13px;
+      background: #f8f2ea;
+      border-radius: 13px;
+      transition: background 0.15s;
+    }
+
+    .store-item:hover { background: #f0e4cc; }
+
+    .store-emoji { font-size: 24px; }
+
+    .store-info { flex: 1; }
+
+    .store-name { font-size: 13px; font-weight: 600; color: var(--text); }
+
+    .store-val { font-size: 11px; color: var(--muted); }
+
+    .sell-btn {
+      background: var(--soil2);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 6px 13px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .sell-btn:hover { background: var(--accent); color: var(--text); }
+    .sell-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .sell-btn:disabled:hover { background: var(--soil2); color: #fff; }
+
+    .sell-all-btn {
+      width: 100%;
+      margin-top: 12px;
+      background: var(--accent);
+      color: var(--text);
+      border: none;
+      border-radius: 13px;
+      padding: 11px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.15s;
+      letter-spacing: 0.2px;
+    }
+
+    .sell-all-btn:hover { background: #d4921e; }
+    .sell-all-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .store-empty {
+      text-align: center;
+      color: #b0a090;
+      font-size: 13px;
+      padding: 16px 0;
+    }
+
+    /* ── RARE FLASH ── */
+    .rare-flash {
+      position: fixed;
+      inset: 0;
+      background: rgba(232,168,56,0.38);
+      pointer-events: none;
+      animation: flashFade 0.7s ease-out forwards;
+      z-index: 9999;
+    }
+
+    @keyframes flashFade {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ── RARE BANNER ── */
+    .rare-banner {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: linear-gradient(135deg, #E8A838, #d07020);
+      color: #fff;
+      border-radius: 50px;
+      padding: 12px 28px;
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 8px 32px rgba(232,168,56,0.5);
+      z-index: 9998;
+      pointer-events: none;
+      transition: transform 0.4s cubic-bezier(.17,.67,.34,1.2);
+    }
+
+    .rare-banner.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── COIN BURST ── */
+    .coin-burst {
+      position: fixed;
+      pointer-events: none;
+      font-size: 18px;
+      animation: coinBurst 1s ease-out forwards;
+      z-index: 9997;
+    }
+
+    @keyframes coinBurst {
+      0%   { transform: translate(0,0) scale(1); opacity:1; }
+      100% { transform: translate(var(--cx),var(--cy)) scale(0.1); opacity:0; }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 640px) {
+      .panels { grid-template-columns: 1fr; }
+      .ground { height: 300px; }
+      .stats { gap: 6px; }
+      .stat-pill { font-size: 11px; padding: 5px 11px; }
+      .logo { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="game-wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">Dig<span>Deep</span></div>
+    <div class="stats">
+      <div class="stat-pill">💰 <span id="gold-stat">$0</span></div>
+      <div class="stat-pill">⛏️ <span id="digs-stat">0 digs</span></div>
+      <div class="stat-pill">🏆 <span id="rare-stat">0 rare</span></div>
+    </div>
+  </div>
+
+  <!-- PANELS -->
+  <div class="panels">
+
+    <!-- DIG PANEL -->
+    <div class="dig-panel">
+      <div class="dig-label">⛏ Dig Playground</div>
+      <div class="ground" id="ground"></div>
+      <div class="depth-bar-wrap">
+        <div class="depth-bar" id="depth-bar" style="width:0%"></div>
+      </div>
+      <div class="depth-label" id="depth-label">Dig to go deeper…</div>
+      <div class="shovel-hint">👆 Click anywhere to dig</div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="right-col">
+
+      <!-- INVENTORY -->
+      <div class="panel-card">
+        <div class="panel-title">
+          🎒 Inventory
+          <span class="badge" id="inv-badge">0 / 16</span>
+        </div>
+        <div class="inv-grid" id="inv-grid"></div>
+      </div>
+
+      <!-- STORE -->
+      <div class="panel-card">
+        <div class="panel-title">🏪 Sell at Store</div>
+        <div class="store-list" id="store-list"></div>
+        <button class="sell-all-btn" id="sell-all-btn" onclick="sellAll()" disabled>
+          Sell All Items
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- RARE BANNER -->
+<div class="rare-banner" id="rare-banner">✨ Rare Find!</div>
+
+<script>
+  // ─── ITEM DEFINITIONS ───────────────────────────────────────────────────────
+  const ITEMS = [
+    { id:'stone',    emoji:'🪨', name:'Stone',        value:1,   rarity:0.28, rare:false },
+    { id:'bone',     emoji:'🦴', name:'Fish Bone',    value:3,   rarity:0.17, rare:false },
+    { id:'worm',     emoji:'🪱', name:'Earthworm',    value:2,   rarity:0.10, rare:false },
+    { id:'mushroom', emoji:'🍄', name:'Mushroom',     value:5,   rarity:0.10, rare:false },
+    { id:'coin',     emoji:'🪙', name:'Old Coin',     value:8,   rarity:0.12, rare:false },
+    { id:'root',     emoji:'🌱', name:'Ancient Root', value:12,  rarity:0.07, rare:false },
+    { id:'money',    emoji:'💵', name:'Lost Cash',    value:35,  rarity:0.04, rare:true  },
+    { id:'ruby',     emoji:'💎', name:'Ruby',         value:50,  rarity:0.04, rare:true  },
+    { id:'fossil',   emoji:'🦕', name:'Fossil',       value:80,  rarity:0.03, rare:true  },
+    { id:'diamond',  emoji:'💠', name:'Diamond',      value:130, rarity:0.02, rare:true  },
+    { id:'ring',     emoji:'💍', name:'Gold Ring',    value:220, rarity:0.01, rare:true  },
+    { id:'nothing',  emoji:'💨', name:'Empty',        value:0,   rarity:0.02, rare:false },
+  ];
+
+  // ─── STATE ──────────────────────────────────────────────────────────────────
+  let inventory    = {};
+  let gold         = 0;
+  let totalDigs    = 0;
+  let rareCount    = 0;
+  let depthProgress = 0;
+
+  // ─── HELPERS ─────────────────────────────────────────────────────────────────
+  function pickItem() {
+    const depthBonus = Math.min(depthProgress / 600, 0.07);
+    let roll = Math.random();
+    let cum  = 0;
+    for (const item of ITEMS) {
+      let r = item.rarity;
+      if (item.rare) r += depthBonus;
+      cum += r;
+      if (roll < cum) return item;
+    }
+    return ITEMS[0];
+  }
+
+  const DIRT_COLORS = ['#A0714F','#8B5E3C','#6B4226','#5C3620','#C49A6C','#9E7050'];
+
+  function randDirt() {
+    return DIRT_COLORS[Math.floor(Math.random() * DIRT_COLORS.length)];
+  }
+
+  // ─── ANIMATIONS ──────────────────────────────────────────────────────────────
+  function spawnHole(x, y) {
+    const hole = document.createElement('div');
+    hole.className = 'hole';
+    const size = 42 + Math.random() * 22;
+    hole.style.cssText = `width:${size}px;height:${size*0.55}px;left:${x}px;top:${y}px;`;
+    ground.appendChild(hole);
+    setTimeout(() => { hole.style.transition = 'opacity 3s'; hole.style.opacity = '0'; }, 2200);
+    setTimeout(() => hole.remove(), 5500);
+  }
+
+  function spawnDirt(x, y) {
+    const count = 12 + Math.floor(Math.random() * 7);
+    for (let i = 0; i < count; i++) {
+      const p   = document.createElement('div');
+      p.className = 'dirt-particle';
+      const ang  = (Math.PI * 2 * i / count) + (Math.random() - 0.5) * 0.9;
+      const dist = 28 + Math.random() * 55;
+      const size = 5 + Math.random() * 6;
+      p.style.cssText = `
+        width:${size}px;height:${size}px;
+        background:${randDirt()};
+        left:${x}px;top:${y}px;
+        --dx:${Math.cos(ang)*dist}px;
+        --dy:${Math.sin(ang)*dist - 18}px;
+      `;
+      ground.appendChild(p);
+      setTimeout(() => p.remove(), 800);
+    }
+  }
+
+  function spawnItemPop(x, y, item) {
+    const el = document.createElement('div');
+    el.className = 'item-pop';
+    el.textContent = item.emoji;
+    el.style.cssText = `left:${x}px;top:${y}px;`;
+    ground.appendChild(el);
+    setTimeout(() => el.remove(), 1300);
+
+    const toast = document.createElement('div');
+    toast.className = 'find-toast';
+    toast.style.cssText = `left:${x}px;top:${y + 12}px;`;
+    const worth = item.value > 0
+      ? `<span class="worth">+$${item.value}</span>`
+      : `<span class="empty-lbl">Nothing…</span>`;
+    toast.innerHTML = `<div class="toast-pill">${item.emoji} ${item.name} ${worth}</div>`;
+    ground.appendChild(toast);
+    setTimeout(() => toast.remove(), 1600);
+  }
+
+  function triggerRareFlash(item) {
+    // screen flash
+    const f = document.createElement('div');
+    f.className = 'rare-flash';
+    document.body.appendChild(f);
+    setTimeout(() => f.remove(), 800);
+
+    // banner
+    const banner = document.getElementById('rare-banner');
+    banner.textContent = `✨ Rare Find — ${item.emoji} ${item.name}!`;
+    banner.classList.add('show');
+    setTimeout(() => banner.classList.remove('show'), 2400);
+
+    // coin burst from center
+    for (let i = 0; i < 10; i++) {
+      setTimeout(() => {
+        const c = document.createElement('div');
+        c.className = 'coin-burst';
+        const ang  = Math.random() * Math.PI * 2;
+        const dist = 80 + Math.random() * 160;
+        c.style.cssText = `
+          left:50vw;top:40vh;
+          --cx:${Math.cos(ang)*dist}px;
+          --cy:${Math.sin(ang)*dist}px;
+        `;
+        c.textContent = '🪙';
+        document.body.appendChild(c);
+        setTimeout(() => c.remove(), 1100);
+      }, i * 60);
+    }
+  }
+
+  // ─── INVENTORY & STORE ───────────────────────────────────────────────────────
+  function addToInventory(item) {
+    if (item.id === 'nothing') return;
+    inventory[item.id] = (inventory[item.id] || 0) + 1;
+    renderInventory();
+    renderStore();
+  }
+
+  function renderInventory() {
+    const entries = Object.entries(inventory).filter(([,v]) => v > 0);
+    invGrid.innerHTML = '';
+
+    entries.forEach(([id, qty]) => {
+      const def  = ITEMS.find(i => i.id === id);
+      const slot = document.createElement('div');
+      slot.className = 'inv-slot';
+      slot.title = `${def.name} · $${def.value} each · Click to sell one`;
+      slot.innerHTML = `${def.emoji}<span class="qty">×${qty}</span><span class="item-label">${def.name.split(' ')[0]}</span>`;
+      slot.onclick = () => sellOne(id);
+      invGrid.appendChild(slot);
+    });
+
+    // empty slots
+    for (let i = entries.length; i < 16; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'inv-slot empty';
+      invGrid.appendChild(slot);
+    }
+
+    document.getElementById('inv-badge').textContent = `${entries.length} / 16`;
+  }
+
+  function renderStore() {
+    const sellable = Object.entries(inventory).filter(([,v]) => v > 0);
+    storeList.innerHTML = '';
+
+    if (sellable.length === 0) {
+      storeList.innerHTML = '<div class="store-empty">No items yet. Go dig! ⛏️</div>';
+      sellAllBtn.disabled = true;
+      return;
+    }
+
+    sellAllBtn.disabled = false;
+    sellable.forEach(([id, qty]) => {
+      const def   = ITEMS.find(i => i.id === id);
+      const total = def.value * qty;
+      const row   = document.createElement('div');
+      row.className = 'store-item';
+      row.innerHTML = `
+        <span class="store-emoji">${def.emoji}</span>
+        <div class="store-info">
+          <div class="store-name">${def.name} ×${qty}</div>
+          <div class="store-val">$${def.value} each · <strong>$${total}</strong> total</div>
+        </div>
+        <button class="sell-btn" onclick="sellOne('${id}')">Sell</button>
+      `;
+      storeList.appendChild(row);
+    });
+  }
+
+  function sellOne(id) {
+    if (!inventory[id] || inventory[id] <= 0) return;
+    const def = ITEMS.find(i => i.id === id);
+    gold += def.value;
+    inventory[id]--;
+    if (inventory[id] === 0) delete inventory[id];
+    updateStats();
+    renderInventory();
+    renderStore();
+  }
+
+  function sellAll() {
+    let earned = 0;
+    Object.entries(inventory).forEach(([id, qty]) => {
+      const def = ITEMS.find(i => i.id === id);
+      earned += def.value * qty;
+    });
+    gold += earned;
+    inventory = {};
+    updateStats();
+    renderInventory();
+    renderStore();
+  }
+
+  // ─── STATS & DEPTH ───────────────────────────────────────────────────────────
+  function updateStats() {
+    document.getElementById('gold-stat').textContent  = '$' + gold.toLocaleString();
+    document.getElementById('digs-stat').textContent  = totalDigs + ' digs';
+    document.getElementById('rare-stat').textContent  = rareCount + ' rare';
+  }
+
+  function updateDepth() {
+    depthProgress = Math.min(depthProgress + 14 + Math.random() * 14, 500);
+    const pct = Math.round((depthProgress / 500) * 100);
+    document.getElementById('depth-bar').style.width = pct + '%';
+    const m = Math.round(depthProgress / 10);
+    const label = pct < 100
+      ? `${m}m deep — rare chances rising!`
+      : 'Max depth! Resetting…';
+    document.getElementById('depth-label').textContent = label;
+    if (depthProgress >= 500) depthProgress = 0;
+  }
+
+  // ─── GROUND CLICK ────────────────────────────────────────────────────────────
+  const ground    = document.getElementById('ground');
+  const invGrid   = document.getElementById('inv-grid');
+  const storeList = document.getElementById('store-list');
+  const sellAllBtn = document.getElementById('sell-all-btn');
+
+  ground.addEventListener('click', function (e) {
+    const rect = ground.getBoundingClientRect();
+    const x    = e.clientX - rect.left;
+    const y    = e.clientY - rect.top;
+
+    totalDigs++;
+    updateDepth();
+    spawnHole(x, y);
+    spawnDirt(x, y);
+
+    const item = pickItem();
+
+    setTimeout(() => spawnItemPop(x, y, item), 200);
+
+    if (item.id !== 'nothing') {
+      addToInventory(item);
+      if (item.rare) {
+        rareCount++;
+        triggerRareFlash(item);
+      }
+    }
+
+    updateStats();
+  });
+
+  // ─── INIT ─────────────────────────────────────────────────────────────────────
+  renderInventory();
+  renderStore();
+</script>
+</body>
+</html>
